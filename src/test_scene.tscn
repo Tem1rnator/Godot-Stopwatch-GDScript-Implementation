@@ -1,0 +1,134 @@
+[gd_scene load_steps=5 format=3 uid="uid://chkkdvut5qu1f"]
+
+[ext_resource type="Script" uid="uid://r7iihjl6y8yc" path="res://src/test_scene.gd" id="1_uhqqe"]
+[ext_resource type="PackedScene" uid="uid://cyvf6jl40mxfe" path="res://src/stopwatch.tscn" id="2_ia1lp"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_ia1lp"]
+font_size = 30
+
+[sub_resource type="LabelSettings" id="LabelSettings_sasra"]
+font_size = 25
+
+[node name="TestScene" type="Control" node_paths=PackedStringArray("stopwatch", "time_label")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_uhqqe")
+stopwatch = NodePath("Stopwatch")
+time_label = NodePath("ContentHBox/TextVBox/TimeLabel")
+
+[node name="Timer" type="Timer" parent="."]
+wait_time = 0.5
+autostart = true
+
+[node name="Stopwatch" parent="." instance=ExtResource("2_ia1lp")]
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -278.0
+offset_top = 33.0
+offset_right = 278.0
+offset_bottom = 75.0
+grow_horizontal = 2
+text = "Stopwatch Implementation Test Scene"
+label_settings = SubResource("LabelSettings_ia1lp")
+
+[node name="ContentHBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -102.0
+offset_top = -90.0
+offset_right = 102.0
+offset_bottom = 90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ContentHBox"]
+layout_mode = 2
+
+[node name="Label3" type="Label" parent="ContentHBox/VBoxContainer"]
+layout_mode = 2
+text = "Time scale type:"
+
+[node name="TimeScaleOptionButton" type="OptionButton" parent="ContentHBox/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+selected = 0
+item_count = 3
+popup/item_0/text = "Engine Time Scale"
+popup/item_0/id = 0
+popup/item_1/text = "Custom Time Scale"
+popup/item_1/id = 1
+popup/item_2/text = "Real Time Scale"
+popup/item_2/id = 2
+
+[node name="Margin" type="MarginContainer" parent="ContentHBox/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 5
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ContentHBox/VBoxContainer/Margin"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+layout_mode = 2
+text = "Engine time scale:"
+
+[node name="EngineTimeScaleLineEdit" type="LineEdit" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+layout_mode = 2
+text = "1.0"
+
+[node name="Label2" type="Label" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+layout_mode = 2
+text = "Custom time scale:"
+
+[node name="CustomTimeScaleLineEdit" type="LineEdit" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+layout_mode = 2
+text = "1.0"
+
+[node name="ButtonsVBox" type="VBoxContainer" parent="ContentHBox"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StartButton" type="Button" parent="ContentHBox/ButtonsVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "start"
+
+[node name="PauseButton" type="Button" parent="ContentHBox/ButtonsVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "pause"
+
+[node name="ResetButton" type="Button" parent="ContentHBox/ButtonsVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "reset"
+
+[node name="TextVBox" type="VBoxContainer" parent="ContentHBox"]
+layout_mode = 2
+
+[node name="TimeLabel" type="Label" parent="ContentHBox/TextVBox"]
+layout_mode = 2
+text = "00:00:00"
+label_settings = SubResource("LabelSettings_sasra")
+
+[connection signal="timeout" from="Timer" to="." method="_on_timer_timeout"]
+[connection signal="item_selected" from="ContentHBox/VBoxContainer/TimeScaleOptionButton" to="." method="_on_time_scale_option_button_item_selected"]
+[connection signal="text_changed" from="ContentHBox/VBoxContainer/Margin/VBoxContainer/EngineTimeScaleLineEdit" to="." method="_on_engine_time_scale_line_edit_text_changed"]
+[connection signal="text_changed" from="ContentHBox/VBoxContainer/Margin/VBoxContainer/CustomTimeScaleLineEdit" to="." method="_on_custom_time_scale_line_edit_text_changed"]
+[connection signal="pressed" from="ContentHBox/ButtonsVBox/StartButton" to="." method="_on_start_button_pressed"]
+[connection signal="pressed" from="ContentHBox/ButtonsVBox/PauseButton" to="." method="_on_pause_button_pressed"]
+[connection signal="pressed" from="ContentHBox/ButtonsVBox/ResetButton" to="." method="_on_reset_button_pressed"]
