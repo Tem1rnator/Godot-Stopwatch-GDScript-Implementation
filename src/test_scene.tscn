@@ -20,10 +20,6 @@ script = ExtResource("1_uhqqe")
 stopwatch = NodePath("Stopwatch")
 time_label = NodePath("ContentHBox/TextVBox/TimeLabel")
 
-[node name="Timer" type="Timer" parent="."]
-wait_time = 0.5
-autostart = true
-
 [node name="Stopwatch" parent="." instance=ExtResource("2_ia1lp")]
 
 [node name="Title" type="Label" parent="."]
@@ -125,7 +121,6 @@ layout_mode = 2
 text = "00:00:00"
 label_settings = SubResource("LabelSettings_sasra")
 
-[connection signal="timeout" from="Timer" to="." method="_on_timer_timeout"]
 [connection signal="item_selected" from="ContentHBox/VBoxContainer/TimeScaleOptionButton" to="." method="_on_time_scale_option_button_item_selected"]
 [connection signal="text_changed" from="ContentHBox/VBoxContainer/Margin/VBoxContainer/EngineTimeScaleLineEdit" to="." method="_on_engine_time_scale_line_edit_text_changed"]
 [connection signal="text_changed" from="ContentHBox/VBoxContainer/Margin/VBoxContainer/CustomTimeScaleLineEdit" to="." method="_on_custom_time_scale_line_edit_text_changed"]

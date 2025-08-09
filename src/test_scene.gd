@@ -6,8 +6,7 @@ extends Control
 
 
 func _process(delta: float) -> void:
-	pass
-	#time_label.text = stopwatch.get_time_string(true, '.')
+	time_label.text = stopwatch.get_time_string(true, '.')
 
 
 #region Buttons
@@ -24,7 +23,7 @@ func _on_reset_button_pressed() -> void:
 
 #region Time Scale
 func _on_time_scale_option_button_item_selected(index: int) -> void:
-	stopwatch.time_scale_type = index as Stopwatch.TimeScaleType
+	stopwatch.time_scale_mode = index as Stopwatch.TimeScaleMode
 
 
 func _on_engine_time_scale_line_edit_text_changed(new_text: String) -> void:
@@ -37,6 +36,3 @@ func _on_custom_time_scale_line_edit_text_changed(new_text: String) -> void:
 		stopwatch.custom_time_scale = new_text.to_float()
 #endregion
 
-
-func _on_timer_timeout() -> void:
-	time_label.text = stopwatch.get_time_string(true, '.')

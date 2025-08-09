@@ -14,11 +14,12 @@ class_name Stopwatch
 var paused := true:
 	set = _set_paused
 
-## Total elapsed time in microseconds since the start (excluding paused periods, scales with the current time scale mode).
+## Total elapsed time in microseconds since the start of the stopwatch (excluding paused periods, scales with the current time scale mode).
 var elapsed_usec: float = 0:   # this variable is a float isntead of an int because of possible non-integer time scaling.
 	get = get_elapsed_usec
 
-## The timestamp (i.e. value returned by Time.get_ticks_usec()) of the last time elapsed_usec variable was updated.
+## The timestamp (i.e. value returned by Time.get_ticks_usec()) that specifies the time this stopwatch was previously up to date with.
+## This variable helps accumulate uncounted because the Stopwatch doesn't update the elapsed time every frame.
 var _latest_update_timestamp: int = Time.get_ticks_usec()
 
 
@@ -38,7 +39,7 @@ enum TimeScaleMode {
 @export var custom_time_scale: float = 1.0:
 	set = _set_custom_time_scale
 
-## Cached copy of Engine.time_scale value (since Godot has no Engine.time_scale_changed signal)
+## Cached value of Engine.time_scale. This is used to react to changes in Engine.time_scale
 var _saved_engine_time_scale: float = 1.0
 #endregion
 
@@ -52,7 +53,7 @@ func _ready() -> void:
 		start()
 
 
-## Poll for changes to Engine.time_scale and update state accordingly.
+## Check for changes to Engine.time_scale and call the _on_engine_time_scale_changed() method accordingly.
 ## This is a workaround because Engine currently has no time_scale_changed signal.
 func _process(delta: float) -> void:
 	if Engine.time_scale != _saved_engine_time_scale:
@@ -94,7 +95,8 @@ func _set_paused(new_pause_state: bool) -> void:
 
 
 #region Updating elapsed time
-## TODO comment
+## Updates elapsed_usec to accumulate all the uncounted time since _latest_update_timestamp.
+## Will not accumulate time if it was in a pause.
 func _update_elapsed_time() -> void:
 	if paused:   # not updating elapsed time since the timestamp if it's a pause timestamp
 		return
@@ -102,7 +104,8 @@ func _update_elapsed_time() -> void:
 	elapsed_usec += _get_elapsed_time_since_timestamp()
 
 
-## TODO comment
+## Returns the amount of time (in microseconds) since _latest_update_timestamp, adjusted by the current time scale mode.
+## Also refreshes _latest_update_timestamp to the current time.
 func _get_elapsed_time_since_timestamp() -> float:
 	var elapsed_time_since_timestamp_unscaled: int = Time.get_ticks_usec() - _latest_update_timestamp
 	_latest_update_timestamp = Time.get_ticks_usec()
@@ -122,11 +125,13 @@ func _get_elapsed_time_since_timestamp() -> float:
 
 
 #region Time scale
+## Called when Engine.time_scale changes (detected manually in _process() as a workaround for now).
 func _on_engine_time_scale_changed(new_scale: float) -> void:
 	_update_elapsed_time()
 	_saved_engine_time_scale = new_scale
 
 
+## Setter for custom_time_scale.
 func _set_custom_time_scale(new_scale: float) -> void:
 	_update_elapsed_time()
 	custom_time_scale = new_scale
@@ -134,7 +139,8 @@ func _set_custom_time_scale(new_scale: float) -> void:
 
 
 #region Total time methods
-## Returns the total elapsed time since the start of the stopwatch in microseconds.
+## Returns the total elapsed time in microseconds.
+## Also makes sure the elapsed_usec is up to date before returning. All other get_total_* methods below work the same way.
 func get_elapsed_usec() -> float:
 	if not paused and _latest_update_timestamp != Time.get_ticks_usec():   # only updating elapsed time if Stopwatch isn't paused and the timestamp isn't up to date
 		elapsed_usec += _get_elapsed_time_since_timestamp()
@@ -159,7 +165,8 @@ func get_total_elapsed_days() -> float:   # maybe don't need this
 
 
 #region Formatted time methods
-## Returns a dictionary with the elapsed time that is converted into larger time values.
+## Breaks down the elapsed time into individual units (hours, minutes, seconds, etc.) and returns them as integer values in a dictionary.
+## Values are cyclic (e.g., seconds/hours wrap from 0 to 59, milliseconds/microseconds from 0 to 999)
 func get_time_dict() -> Dictionary[String, int]:
 	var time_dict: Dictionary[String, int] = {
 		"microseconds": int(elapsed_usec) % 1000,
@@ -172,8 +179,8 @@ func get_time_dict() -> Dictionary[String, int]:
 	return time_dict
 
 
-## Returns the absolute value of the result of get_time_dict() but converted into strings
-## There are also *_padded time values
+## Same as get_time_dict() but with each value as a string.
+## Also includes *_padded variants for display (e.g., "07" seconds instead of "7", "003" milliseconds instead of "3").
 func get_time_dict_strings() -> Dictionary[String, String]:
 	var time_dict := get_time_dict()
 	var time_dict_strings: Dictionary[String, String] = {
@@ -192,7 +199,8 @@ func get_time_dict_strings() -> Dictionary[String, String]:
 	return time_dict_strings
 
 
-## Returns a string of the elapsed time as an hh:mm:ss or hh:mm:ss:ms string, optionally with a custom delimiter
+## Returns a formatted elapsed time string in hh:mm:ss or hh:mm:ss:ms format.
+## Optionally, a custom delimiter can be passed as a parameter (default is ':').
 func get_time_string(display_milliseconds := false, delimiter := ':') -> String:
 	var time_dict_strings = get_time_dict_strings()
 	
