@@ -1,14 +1,14 @@
 extends Node
 class_name Stopwatch
 ## This node allows the user to keep track of elapsed time and provides utility methods to format that time.
-## Stopwatch's time can be scaled by the Engine's time_scale, a custom time scale, or follow real-world time.
+## Stopwatch's time can be scaled by the Engine's time_scale and a custom time scale.
 
 
 ## If true, the stopwatch will start immediately when it enters the scene tree.
 @export var autostart := false
 
 ## If true, pauses the stopwatch after reset() is called.
-@export var pause_on_reset := true
+@export var pause_on_reset := false
 
 ## Determines whether the stopwatch is currently counting time.
 var paused := true:
@@ -16,32 +16,55 @@ var paused := true:
 
 ## Total elapsed time in microseconds since the start of the stopwatch (excluding paused periods, scales with the current time scale mode).
 var elapsed_usec: float = 0:   # this variable is a float isntead of an int because of possible non-integer time scaling.
-	get = get_elapsed_usec
+	get = get_total_elapsed_microseconds
 
+
+## Defines the two methods used for tracking time. Both methods can still be scaled by Engine.time_scale and custom_time_scale
+enum TimeMode {
+	EngineDelta,       # Better for tracking in-game time.
+	# Delta-based approach: Tracks time by accumulating delta time every process physics frame or process frame, depending on the process_callback variable.
+	# May deviate from real-world time at very low FPS to match game slowdowns (see Node's _process() function documentation about physics spiral of death).
+	
+	EngineTimestamp    # Better for tracking real-world time.
+	# Timestamp-based approach: Tracks time using a "timestamp", i.e. the value of Time.get_ticks_usec() at certain points in time.
+	# Will NOT deviate from real-world time, so it may be punishing during game slowdowns at very low FPS.
+}
+
+## The current time tracking mode
+@export var time_mode := TimeMode.EngineDelta:
+	set = set_time_mode
+
+
+## Utility variable for TimeMode.EngineTimestamp
 ## The timestamp (i.e. value returned by Time.get_ticks_usec()) that specifies the time this stopwatch was previously up to date with.
 ## This variable helps accumulate uncounted because the Stopwatch doesn't update the elapsed time every frame.
 var _latest_update_timestamp: int = Time.get_ticks_usec()
 
 
-#region Time scaling
-## Specifies how elapsed time should be scaled.
-enum TimeScaleMode {
-	EngineTimeScale,  # Scaled by Engine.time_scale
-	CustomTimeScale,  # Scaled by custom_time_scale
-	RealTimeScale     # Scaled by 1.0 (real-world time)
+## Defines two delta time accumulation methods when time_mode == EngineDelta
+enum StopwatchProcessCallback {
+	ProcessPhysics,  # Update the stopwatch every physics process frame (see Node.NOTIFICATION_INTERNAL_PHYSICS_PROCESS).
+	ProcessIdle      # Update the stopwatch every process (rendered) frame (see Node.NOTIFICATION_INTERNAL_PROCESS).
 }
 
-@export_category('Time Scale')
-## Specifies which time scaling mode this stopwatch is currently using.
-@export var time_scale_mode := TimeScaleMode.EngineTimeScale
+## Determines whether the delta time under TimeMode.EngineDelta will be accumulated during every physics process frame or process frame
+@export var process_callback := StopwatchProcessCallback.ProcessIdle:
+	set = set_process_callback
 
-## Multiplier applied to elapsed time when in CustomTimeScale mode.
+
+@export_category('Time Scale')
+## If true, the stopwatch will scale with Engine.time_scale (can stack with custom_time_scale)
+@export var use_engine_time_scale := false
+
+## If true, the stopwatch will scale with custom_time_scale (can stack with Engine.time_scale)
+@export var use_custom_time_scale := false
+
+## Multiplier applied to elapsed time when use_custom_time_scale is true.
 @export var custom_time_scale: float = 1.0:
 	set = _set_custom_time_scale
 
 ## Cached value of Engine.time_scale. This is used to react to changes in Engine.time_scale
 var _saved_engine_time_scale: float = 1.0
-#endregion
 
 
 
@@ -51,13 +74,28 @@ func _ready() -> void:
 	
 	if autostart:
 		start()
+	
+	set_process_callback(process_callback)   # enforcing current process callback
 
 
-## Check for changes to Engine.time_scale and call the _on_engine_time_scale_changed() method accordingly.
-## This is a workaround because Engine currently has no time_scale_changed signal.
+#region process methods
 func _process(delta: float) -> void:
+	_processing(delta)
+
+
+func _physics_process(delta: float) -> void:
+	_processing(delta)
+
+
+func _processing(delta: float) -> void:
+	if time_mode == TimeMode.EngineDelta and not paused:
+		accumulate_elapsed_time_with_delta(delta)
+	
+	# Check for changes to Engine.time_scale and call the _on_engine_time_scale_changed() method accordingly.
+	# This is a workaround because Engine currently has no time_scale_changed signal.
 	if Engine.time_scale != _saved_engine_time_scale:
 		_on_engine_time_scale_changed(Engine.time_scale)
+#endregion
 
 
 ## Starts the stopwatch or resumes it if it was paused.
@@ -79,9 +117,55 @@ func reset() -> void:
 		paused = true
 
 
+#region Updating elapsed time
+## Updates elapsed_usec to accumulate all the uncounted time since _latest_update_timestamp.
+## Will not accumulate time if it was in a pause.
+## This method only has an effect if time_mode == TimeMode.EngineTimestamp
+func _update_elapsed_time() -> void:
+	if time_mode != TimeMode.EngineTimestamp:
+		return
+	if paused:  # not updating elapsed time since the timestamp if it's a pause timestamp
+		return
+	if Time.get_ticks_usec() == _latest_update_timestamp:
+		return
+	
+	elapsed_usec += _get_elapsed_time_since_timestamp()
+
+
+## Returns the amount of time (in microseconds) since _latest_update_timestamp, adjusted by the current time scale mode.
+## Also refreshes _latest_update_timestamp to the current time.
+func _get_elapsed_time_since_timestamp() -> float:
+	var elapsed_time_since_timestamp_unscaled: int = Time.get_ticks_usec() - _latest_update_timestamp
+	_latest_update_timestamp = Time.get_ticks_usec()
+	
+	var elapsed_time_since_timestamp: float = elapsed_time_since_timestamp_unscaled   # float because time_scaled can be a non-integer number
+	
+	if not use_engine_time_scale:
+		elapsed_time_since_timestamp *= Engine.time_scale
+	if use_custom_time_scale:
+		elapsed_time_since_timestamp *= custom_time_scale
+	
+	return elapsed_time_since_timestamp
+
+
+## Method that accumulates elapsed time using delta
+## Used only when time_mode == TimeMode.EngineDelta
+func accumulate_elapsed_time_with_delta(delta: float) -> void:
+	var scaled_delta := delta * 1_000_000  # converting to microseconds
+	
+	if not use_engine_time_scale:
+		scaled_delta *= Engine.time_scale
+	if use_custom_time_scale:
+		scaled_delta *= custom_time_scale
+	
+	elapsed_usec += scaled_delta
+#endregion
+
+
+#region Setters
 ## Setter for paused.
 func _set_paused(new_pause_state: bool) -> void:
-	if paused == new_pause_state:   # doing nothing when paused is set to the same state
+	if paused == new_pause_state:   # doing nothing when paused doesn't change
 		return
 	
 	if new_pause_state:
@@ -94,33 +178,26 @@ func _set_paused(new_pause_state: bool) -> void:
 		paused = false
 
 
-#region Updating elapsed time
-## Updates elapsed_usec to accumulate all the uncounted time since _latest_update_timestamp.
-## Will not accumulate time if it was in a pause.
-func _update_elapsed_time() -> void:
-	if paused:   # not updating elapsed time since the timestamp if it's a pause timestamp
-		return
+## Setter for time_mode
+func set_time_mode(new_mode: TimeMode) -> void:
+	if time_mode == TimeMode.EngineTimestamp and new_mode == TimeMode.EngineDelta:
+		_update_elapsed_time()
+	if time_mode == TimeMode.EngineDelta and new_mode == TimeMode.EngineTimestamp:
+		_latest_update_timestamp = Time.get_ticks_usec()
 	
-	elapsed_usec += _get_elapsed_time_since_timestamp()
+	time_mode = new_mode
 
 
-## Returns the amount of time (in microseconds) since _latest_update_timestamp, adjusted by the current time scale mode.
-## Also refreshes _latest_update_timestamp to the current time.
-func _get_elapsed_time_since_timestamp() -> float:
-	var elapsed_time_since_timestamp_unscaled: int = Time.get_ticks_usec() - _latest_update_timestamp
-	_latest_update_timestamp = Time.get_ticks_usec()
+## Setter for process_callback
+func set_process_callback(new_process_callback: StopwatchProcessCallback) -> void:
+	process_callback = new_process_callback
 	
-	var elapsed_time_since_timestamp: float   # float because time_scaled can be a non-integer number
-	
-	match time_scale_mode:
-		TimeScaleMode.EngineTimeScale:
-			elapsed_time_since_timestamp = _saved_engine_time_scale * elapsed_time_since_timestamp_unscaled
-		TimeScaleMode.CustomTimeScale:
-			elapsed_time_since_timestamp = custom_time_scale * elapsed_time_since_timestamp_unscaled
-		TimeScaleMode.RealTimeScale:
-			elapsed_time_since_timestamp = 1 * elapsed_time_since_timestamp_unscaled
-	
-	return elapsed_time_since_timestamp
+	if process_callback == StopwatchProcessCallback.ProcessPhysics:
+		set_physics_process(true)
+		set_process(false)
+	elif process_callback == StopwatchProcessCallback.ProcessIdle:
+		set_physics_process(false)
+		set_process(true)
 #endregion
 
 
@@ -141,8 +218,9 @@ func _set_custom_time_scale(new_scale: float) -> void:
 #region Total time methods
 ## Returns the total elapsed time in microseconds.
 ## Also makes sure the elapsed_usec is up to date before returning. All other get_total_* methods below work the same way.
-func get_elapsed_usec() -> float:
-	if not paused and _latest_update_timestamp != Time.get_ticks_usec():   # only updating elapsed time if Stopwatch isn't paused and the timestamp isn't up to date
+func get_total_elapsed_microseconds() -> float:
+   # only updating elapsed time if Stopwatch isn't paused and the timestamp isn't up to date
+	if time_mode == TimeMode.EngineTimestamp and not paused and _latest_update_timestamp != Time.get_ticks_usec():
 		elapsed_usec += _get_elapsed_time_since_timestamp()
 	
 	return elapsed_usec
@@ -201,7 +279,7 @@ func get_time_dict_strings() -> Dictionary[String, String]:
 
 ## Returns a formatted elapsed time string in hh:mm:ss or hh:mm:ss:ms format.
 ## Optionally, a custom delimiter can be passed as a parameter (default is ':').
-func get_time_string(display_milliseconds := false, delimiter := ':') -> String:
+func get_time_string(display_milliseconds := true, delimiter := ':') -> String:
 	var time_dict_strings = get_time_dict_strings()
 	
 	var result: String = time_dict_strings["hours_padded"] + delimiter

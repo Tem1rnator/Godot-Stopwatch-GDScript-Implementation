@@ -20,6 +20,10 @@ script = ExtResource("1_uhqqe")
 stopwatch = NodePath("Stopwatch")
 time_label = NodePath("ContentHBox/TextVBox/TimeLabel")
 
+[node name="Timer" type="Timer" parent="."]
+wait_time = 0.3
+autostart = true
+
 [node name="Stopwatch" parent="." instance=ExtResource("2_ia1lp")]
 
 [node name="Title" type="Label" parent="."]
@@ -42,54 +46,72 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -102.0
-offset_top = -90.0
-offset_right = 102.0
-offset_bottom = 90.0
+offset_left = -256.0
+offset_top = -111.0
+offset_right = 256.0
+offset_bottom = 147.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 30
 
 [node name="VBoxContainer" type="VBoxContainer" parent="ContentHBox"]
 layout_mode = 2
+theme_override_constants/separation = 15
 
-[node name="Label3" type="Label" parent="ContentHBox/VBoxContainer"]
+[node name="TimeMode" type="VBoxContainer" parent="ContentHBox/VBoxContainer"]
 layout_mode = 2
-text = "Time scale type:"
 
-[node name="TimeScaleOptionButton" type="OptionButton" parent="ContentHBox/VBoxContainer"]
+[node name="TimeModeLabel" type="Label" parent="ContentHBox/VBoxContainer/TimeMode"]
+layout_mode = 2
+text = "Time mode:"
+
+[node name="TimeModeOptionButton" type="OptionButton" parent="ContentHBox/VBoxContainer/TimeMode"]
 layout_mode = 2
 size_flags_horizontal = 0
 selected = 0
-item_count = 3
-popup/item_0/text = "Engine Time Scale"
+item_count = 2
+popup/item_0/text = "Engine Time"
 popup/item_0/id = 0
-popup/item_1/text = "Custom Time Scale"
+popup/item_1/text = "Real Time"
 popup/item_1/id = 1
-popup/item_2/text = "Real Time Scale"
-popup/item_2/id = 2
 
-[node name="Margin" type="MarginContainer" parent="ContentHBox/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/margin_left = 15
-theme_override_constants/margin_top = 5
-
-[node name="VBoxContainer" type="VBoxContainer" parent="ContentHBox/VBoxContainer/Margin"]
+[node name="ProcessCallback" type="VBoxContainer" parent="ContentHBox/VBoxContainer"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+[node name="ProcessCallbackLabel" type="Label" parent="ContentHBox/VBoxContainer/ProcessCallback"]
 layout_mode = 2
-text = "Engine time scale:"
+text = "Process Callback:"
 
-[node name="EngineTimeScaleLineEdit" type="LineEdit" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+[node name="ProcessCallbackOptionButton" type="OptionButton" parent="ContentHBox/VBoxContainer/ProcessCallback"]
+layout_mode = 2
+size_flags_horizontal = 0
+selected = 1
+item_count = 2
+popup/item_0/text = "Physics Process"
+popup/item_0/id = 0
+popup/item_1/text = "Idle Process"
+popup/item_1/id = 1
+
+[node name="EngineTimeScale" type="VBoxContainer" parent="ContentHBox/VBoxContainer"]
+layout_mode = 2
+
+[node name="EngineTimeScaleCheckBox" type="CheckBox" parent="ContentHBox/VBoxContainer/EngineTimeScale"]
+layout_mode = 2
+button_pressed = true
+text = "Engine Time Scale:"
+
+[node name="EngineTimeScaleLineEdit" type="LineEdit" parent="ContentHBox/VBoxContainer/EngineTimeScale"]
 layout_mode = 2
 text = "1.0"
 
-[node name="Label2" type="Label" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+[node name="CustomTimeScale" type="VBoxContainer" parent="ContentHBox/VBoxContainer"]
 layout_mode = 2
-text = "Custom time scale:"
 
-[node name="CustomTimeScaleLineEdit" type="LineEdit" parent="ContentHBox/VBoxContainer/Margin/VBoxContainer"]
+[node name="CustomTimeScaleCheckBox" type="CheckBox" parent="ContentHBox/VBoxContainer/CustomTimeScale"]
+layout_mode = 2
+text = "Custom Time Scale:"
+
+[node name="CustomTimeScaleLineEdit" type="LineEdit" parent="ContentHBox/VBoxContainer/CustomTimeScale"]
 layout_mode = 2
 text = "1.0"
 
@@ -115,15 +137,39 @@ text = "reset"
 
 [node name="TextVBox" type="VBoxContainer" parent="ContentHBox"]
 layout_mode = 2
+theme_override_constants/separation = 5
 
 [node name="TimeLabel" type="Label" parent="ContentHBox/TextVBox"]
 layout_mode = 2
 text = "00:00:00"
 label_settings = SubResource("LabelSettings_sasra")
 
-[connection signal="item_selected" from="ContentHBox/VBoxContainer/TimeScaleOptionButton" to="." method="_on_time_scale_option_button_item_selected"]
-[connection signal="text_changed" from="ContentHBox/VBoxContainer/Margin/VBoxContainer/EngineTimeScaleLineEdit" to="." method="_on_engine_time_scale_line_edit_text_changed"]
-[connection signal="text_changed" from="ContentHBox/VBoxContainer/Margin/VBoxContainer/CustomTimeScaleLineEdit" to="." method="_on_custom_time_scale_line_edit_text_changed"]
+[node name="Control" type="Control" parent="ContentHBox/TextVBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="OptionButton" type="OptionButton" parent="ContentHBox/TextVBox"]
+layout_mode = 2
+selected = 0
+item_count = 2
+popup/item_0/text = "Update label every frame"
+popup/item_0/id = 0
+popup/item_1/text = "Update label intermittently"
+popup/item_1/id = 1
+
+[node name="SimulateLagCheckButton" type="CheckButton" parent="ContentHBox/TextVBox"]
+layout_mode = 2
+text = "Simulate lag (~5FPS)"
+
+[connection signal="timeout" from="Timer" to="." method="_on_timer_timeout"]
+[connection signal="item_selected" from="ContentHBox/VBoxContainer/TimeMode/TimeModeOptionButton" to="." method="_on_time_mode_option_button_item_selected"]
+[connection signal="item_selected" from="ContentHBox/VBoxContainer/ProcessCallback/ProcessCallbackOptionButton" to="." method="_on_process_callback_option_button_item_selected"]
+[connection signal="toggled" from="ContentHBox/VBoxContainer/EngineTimeScale/EngineTimeScaleCheckBox" to="." method="_on_engine_time_scale_check_box_toggled"]
+[connection signal="text_changed" from="ContentHBox/VBoxContainer/EngineTimeScale/EngineTimeScaleLineEdit" to="." method="_on_engine_time_scale_line_edit_text_changed"]
+[connection signal="toggled" from="ContentHBox/VBoxContainer/CustomTimeScale/CustomTimeScaleCheckBox" to="." method="_on_custom_time_scale_check_box_toggled"]
+[connection signal="text_changed" from="ContentHBox/VBoxContainer/CustomTimeScale/CustomTimeScaleLineEdit" to="." method="_on_custom_time_scale_line_edit_text_changed"]
 [connection signal="pressed" from="ContentHBox/ButtonsVBox/StartButton" to="." method="_on_start_button_pressed"]
 [connection signal="pressed" from="ContentHBox/ButtonsVBox/PauseButton" to="." method="_on_pause_button_pressed"]
 [connection signal="pressed" from="ContentHBox/ButtonsVBox/ResetButton" to="." method="_on_reset_button_pressed"]
+[connection signal="item_selected" from="ContentHBox/TextVBox/OptionButton" to="." method="_on_option_button_item_selected"]
+[connection signal="toggled" from="ContentHBox/TextVBox/SimulateLagCheckButton" to="." method="_on_simulate_lag_check_button_toggled"]
