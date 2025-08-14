@@ -21,40 +21,40 @@ var elapsed_usec: float = 0:   # this variable is a float isntead of an int beca
 
 ## Defines the two methods used for tracking time. Both methods can still be scaled by Engine.time_scale and custom_time_scale
 enum TimeMode {
-	EngineDelta,       # Better for tracking in-game time.
+	Delta,       # Better for tracking in-game time.
 	# Delta-based approach: Tracks time by accumulating delta time every process physics frame or process frame, depending on the process_callback variable.
 	# May deviate from real-world time at very low FPS to match game slowdowns (see Node's _process() function documentation about physics spiral of death).
 	
-	EngineTimestamp    # Better for tracking real-world time.
+	Timestamp    # Better for tracking real-world time.
 	# Timestamp-based approach: Tracks time using a "timestamp", i.e. the value of Time.get_ticks_usec() at certain points in time.
 	# Will NOT deviate from real-world time, so it may be punishing during game slowdowns at very low FPS.
 }
 
 ## The current time tracking mode
-@export var time_mode := TimeMode.EngineDelta:
-	set = set_time_mode
+@export var time_mode := TimeMode.Delta:
+	set = _set_time_mode
 
 
-## Utility variable for TimeMode.EngineTimestamp
+## Utility variable for TimeMode.Timestamp
 ## The timestamp (i.e. value returned by Time.get_ticks_usec()) that specifies the time this stopwatch was previously up to date with.
 ## This variable helps accumulate uncounted because the Stopwatch doesn't update the elapsed time every frame.
 var _latest_update_timestamp: int = Time.get_ticks_usec()
 
 
-## Defines two delta time accumulation methods when time_mode == EngineDelta
+## Defines two delta time accumulation methods when time_mode == Delta
 enum StopwatchProcessCallback {
 	ProcessPhysics,  # Update the stopwatch every physics process frame (see Node.NOTIFICATION_INTERNAL_PHYSICS_PROCESS).
 	ProcessIdle      # Update the stopwatch every process (rendered) frame (see Node.NOTIFICATION_INTERNAL_PROCESS).
 }
 
-## Determines whether the delta time under TimeMode.EngineDelta will be accumulated during every physics process frame or process frame
+## Determines whether the delta time under TimeMode.Delta will be accumulated during every physics process frame or process frame
 @export var process_callback := StopwatchProcessCallback.ProcessIdle:
-	set = set_process_callback
+	set = _set_process_callback
 
 
 @export_category('Time Scale')
 ## If true, the stopwatch will scale with Engine.time_scale (can stack with custom_time_scale)
-@export var use_engine_time_scale := false
+@export var use_engine_time_scale := true
 
 ## If true, the stopwatch will scale with custom_time_scale (can stack with Engine.time_scale)
 @export var use_custom_time_scale := false
@@ -75,10 +75,10 @@ func _ready() -> void:
 	if autostart:
 		start()
 	
-	set_process_callback(process_callback)   # enforcing current process callback
+	_set_process_callback(process_callback)   # enforcing current process callback
 
 
-#region process methods
+#region Process methods
 func _process(delta: float) -> void:
 	_processing(delta)
 
@@ -88,7 +88,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _processing(delta: float) -> void:
-	if time_mode == TimeMode.EngineDelta and not paused:
+	if time_mode == TimeMode.Delta and not paused:
 		accumulate_elapsed_time_with_delta(delta)
 	
 	# Check for changes to Engine.time_scale and call the _on_engine_time_scale_changed() method accordingly.
@@ -120,9 +120,9 @@ func reset() -> void:
 #region Updating elapsed time
 ## Updates elapsed_usec to accumulate all the uncounted time since _latest_update_timestamp.
 ## Will not accumulate time if it was in a pause.
-## This method only has an effect if time_mode == TimeMode.EngineTimestamp
+## This method only has an effect if time_mode == TimeMode.Timestamp
 func _update_elapsed_time() -> void:
-	if time_mode != TimeMode.EngineTimestamp:
+	if time_mode != TimeMode.Timestamp:
 		return
 	if paused:  # not updating elapsed time since the timestamp if it's a pause timestamp
 		return
@@ -149,7 +149,7 @@ func _get_elapsed_time_since_timestamp() -> float:
 
 
 ## Method that accumulates elapsed time using delta
-## Used only when time_mode == TimeMode.EngineDelta
+## Used only when time_mode == TimeMode.Delta
 func accumulate_elapsed_time_with_delta(delta: float) -> void:
 	var scaled_delta := delta * 1_000_000  # converting to microseconds
 	
@@ -160,6 +160,12 @@ func accumulate_elapsed_time_with_delta(delta: float) -> void:
 	
 	elapsed_usec += scaled_delta
 #endregion
+
+
+## Called when Engine.time_scale changes (detected manually in _process() as a workaround for now).
+func _on_engine_time_scale_changed(new_scale: float) -> void:
+	_update_elapsed_time()
+	_saved_engine_time_scale = new_scale
 
 
 #region Setters
@@ -179,17 +185,17 @@ func _set_paused(new_pause_state: bool) -> void:
 
 
 ## Setter for time_mode
-func set_time_mode(new_mode: TimeMode) -> void:
-	if time_mode == TimeMode.EngineTimestamp and new_mode == TimeMode.EngineDelta:
+func _set_time_mode(new_mode: TimeMode) -> void:
+	if time_mode == TimeMode.Timestamp and new_mode == TimeMode.Delta:
 		_update_elapsed_time()
-	if time_mode == TimeMode.EngineDelta and new_mode == TimeMode.EngineTimestamp:
+	if time_mode == TimeMode.Delta and new_mode == TimeMode.Timestamp:
 		_latest_update_timestamp = Time.get_ticks_usec()
 	
 	time_mode = new_mode
 
 
 ## Setter for process_callback
-func set_process_callback(new_process_callback: StopwatchProcessCallback) -> void:
+func _set_process_callback(new_process_callback: StopwatchProcessCallback) -> void:
 	process_callback = new_process_callback
 	
 	if process_callback == StopwatchProcessCallback.ProcessPhysics:
@@ -198,14 +204,6 @@ func set_process_callback(new_process_callback: StopwatchProcessCallback) -> voi
 	elif process_callback == StopwatchProcessCallback.ProcessIdle:
 		set_physics_process(false)
 		set_process(true)
-#endregion
-
-
-#region Time scale
-## Called when Engine.time_scale changes (detected manually in _process() as a workaround for now).
-func _on_engine_time_scale_changed(new_scale: float) -> void:
-	_update_elapsed_time()
-	_saved_engine_time_scale = new_scale
 
 
 ## Setter for custom_time_scale.
@@ -220,7 +218,7 @@ func _set_custom_time_scale(new_scale: float) -> void:
 ## Also makes sure the elapsed_usec is up to date before returning. All other get_total_* methods below work the same way.
 func get_total_elapsed_microseconds() -> float:
    # only updating elapsed time if Stopwatch isn't paused and the timestamp isn't up to date
-	if time_mode == TimeMode.EngineTimestamp and not paused and _latest_update_timestamp != Time.get_ticks_usec():
+	if time_mode == TimeMode.Timestamp and not paused and _latest_update_timestamp != Time.get_ticks_usec():
 		elapsed_usec += _get_elapsed_time_since_timestamp()
 	
 	return elapsed_usec
